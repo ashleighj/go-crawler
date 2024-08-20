@@ -1,0 +1,46 @@
+server:
+  host: localhost
+  port: 8887
+  timeout:
+    server: 30
+    read: 15
+    write: 10
+    idle: 5
+seeds:
+  - https://demo.cyotek.com/
+blacklisted_urls:
+domain_delay_ms: 2000
+max_depth: 2
+ignore_if_contains:
+  - javascript
+  - cdn
+  - .css
+  - .ico
+  - .js
+  - .png
+  - .jpg
+  - .jpeg
+  - .svg
+  - .exe
+  - .pdf
+  - .gif
+  - .tif
+  - .tiff
+  - "skype:"
+  - "whatsapp:"
+  - "sms:"
+  - "ftp:"
+  - "file:"
+  - "mid:"
+  - "chrome:"
+  - "app:"
+  - "data:"
+  - "afs:"
+  - "cid:"
+  - "callto:"
+  - "mailto:"
+  - "itms:"
+  - "itms-apps:"
+  - "ma-windows-store:"
+  - "tel:"
+  - "geo:"
