@@ -20,29 +20,14 @@ import (
 	 Hope that helps!
 */
 
-// waits for exit signal - keeps main go routine running until an appropriate shutdown time
-var doneChan = make(chan bool)
+func filter(
+	toBeFiltered chan *crawler.Page,
+	toBeVisited chan *crawler.Page,
+	visitedURLs *crawler.ConcurrentMap,
+	seenContent *crawler.ConcurrentMap,
+	pendingURLs *crawler.ConcurrentCounter,
+	doneChan chan bool) {
 
-// all urls yet to be directed or downloaded
-var toBeFiltered = make(chan *crawler.Page)
-
-// all urls yet to be directed or downloaded
-var toBeVisited = make(chan *crawler.Page)
-
-// enforce politeness by having separate goroutines process urls per host,
-// so number of host visits within a specific timeframe can be controlled
-var hostChanMap = make(map[string]chan *crawler.Page)
-
-var pendingURLs = crawler.NewConcurrentCounter()
-
-var visitedURLs = crawler.NewConcurrentMap()
-
-var seenContent = crawler.NewConcurrentMap()
-
-var domainHitDelayMS = 1000
-var maxDepth = 5
-
-func filter() {
 	for {
 		select {
 		case page := <-toBeFiltered:
@@ -54,7 +39,7 @@ func filter() {
 				toBeVisited <- page
 			} else {
 				logger.Infof("new page rejected - %s", page.URL)
-				break
+				checkDone(pendingURLs, doneChan)
 			}
 		default:
 		}
@@ -62,19 +47,35 @@ func filter() {
 }
 
 // route routes the url to a channel based on its host
-func route() {
+func route(
+	toBeVisited chan *crawler.Page,
+	hostChanMap map[string]chan *crawler.Page,
+	pendingURLs *crawler.ConcurrentCounter,
+	visitedURLs *crawler.ConcurrentMap,
+	seenContent *crawler.ConcurrentMap,
+	toBeFiltered chan *crawler.Page,
+	doneChan chan bool) {
+
 	for {
 		select {
 		case page := <-toBeVisited:
 			logger.Infof("new page to be routed - %s", page.URL)
-			channel := getHostChannel(page)
+			channel := getHostChannel(page, hostChanMap, pendingURLs, visitedURLs, seenContent, toBeFiltered, doneChan)
 			channel <- page
 		default:
 		}
 	}
 }
 
-func getHostChannel(page *crawler.Page) (hostChan chan *crawler.Page) {
+func getHostChannel(
+	page *crawler.Page,
+	hostChanMap map[string]chan *crawler.Page,
+	pendingURLs *crawler.ConcurrentCounter,
+	visitedURLs *crawler.ConcurrentMap,
+	seenContent *crawler.ConcurrentMap,
+	toBeFiltered chan *crawler.Page,
+	doneChan chan bool) (hostChan chan *crawler.Page) {
+
 	// get url domain part
 	domain, e := crawler.GetURLDomain(page.URL)
 	if e != nil {
@@ -88,29 +89,47 @@ func getHostChannel(page *crawler.Page) (hostChan chan *crawler.Page) {
 		channel = make(chan *crawler.Page)
 		hostChanMap[domain] = channel
 
-		go crawlDomainURLs(domain, channel)
+		go crawlDomainURLs(domain, channel, pendingURLs, visitedURLs, seenContent, toBeFiltered, doneChan)
 		logger.Infof("host channel created for domain [%s]", domain)
 	}
+
 	logger.Infof("returning host channel for domain [%s]", domain)
 	return channel
 }
 
-func crawlDomainURLs(domain string, channel chan *crawler.Page) {
+func crawlDomainURLs(
+	domain string,
+	channel chan *crawler.Page,
+	pendingURLs *crawler.ConcurrentCounter,
+	visitedURLs *crawler.ConcurrentMap,
+	seenContent *crawler.ConcurrentMap,
+	toBeFiltered chan *crawler.Page,
+	doneChan chan bool) {
+
 	logger.Infof("now receiving urls to be crawled from domain [%s]", domain)
+
 	for {
 		page := <-channel
-		time.Sleep(time.Duration(domainHitDelayMS) * time.Millisecond)
+		time.Sleep(time.Duration(crawlerConfig.Get().DomainHitDelayMS) * time.Millisecond)
 
 		logger.Infof("queueing new link [%s] from domain [%s] for crawl", page.URL, domain)
-		go crawl(page)
+
+		go crawl(page, pendingURLs, visitedURLs, seenContent, toBeFiltered, doneChan)
 	}
 }
 
-func crawl(currentPage *crawler.Page) {
+func crawl(
+	currentPage *crawler.Page,
+	pendingURLs *crawler.ConcurrentCounter,
+	visitedURLs *crawler.ConcurrentMap,
+	seenContent *crawler.ConcurrentMap,
+	toBeFiltered chan *crawler.Page,
+	doneChan chan bool) {
+
 	var children []*crawler.Page
 	defer func() {
 		pendingURLs.Subtract(1)
-		checkDone(children)
+		checkDone(pendingURLs, doneChan)
 	}()
 
 	if currentPage == nil {
@@ -128,8 +147,7 @@ func crawl(currentPage *crawler.Page) {
 	// fetch page body
 	pageBody, e := crawler.FetchPageBody(currentPage.URL)
 	if e != nil {
-		logger.Warnf("broken link [%s] in page [%s], can't crawl - %s",
-			currentPage.URL, currentPage.Parent.URL, e)
+		logger.Warnf("broken link [%s], can't crawl - %s", currentPage.URL, e)
 		return
 	}
 	if pageBody == nil {
@@ -146,6 +164,11 @@ func crawl(currentPage *crawler.Page) {
 	currentPage.RawContent = pageContentString
 	currentPage.ContentHash = util.Hash(pageContentString)
 
+	if seenContent.KeyExists(currentPage.ContentHash) {
+		logger.Infof("page [%s] not crawlable - content already seen", currentPage.URL)
+		return
+	}
+
 	visitedURLs.Add(currentPage.URLHash, 1)
 	seenContent.Add(currentPage.ContentHash, 1)
 
@@ -157,10 +180,17 @@ func crawl(currentPage *crawler.Page) {
 	}
 }
 
-func checkDone(children []*crawler.Page) {
-	if pendingURLs.GetCount() == 0 && (children == nil || len(children) == 0) {
+func checkDone(pendingURLs *crawler.ConcurrentCounter, doneChan chan bool) {
+	logger.Info("checking if done")
+
+	if pendingURLs.GetCount() == 0 {
+		logger.Info("no more pending urls, ending crawl")
 		doneChan <- true
+		return
 	}
+
+	logger.Infof("pending url count [%d]", pendingURLs.GetCount())
+	logger.Info("crawl continuing...")
 }
 
 func main() {
@@ -174,6 +204,29 @@ func main() {
  )/   )/    )..-.(   )/._.'         )/'._.'   )/   )/  )/    )/  )/   )/   )/,__.'    )..-.(   )/   )/ 
                                                                                                       
 `)
+
+	// waits for exit signal - keeps main go routine running until an appropriate shutdown time
+	doneChan := make(chan bool)
+
+	// all urls yet to be directed or downloaded
+	toBeFiltered := make(chan *crawler.Page)
+
+	// all urls yet to be directed or downloaded
+	toBeVisited := make(chan *crawler.Page)
+
+	// enforce politeness by having separate goroutines process urls per host,
+	// so number of host visits within a specific timeframe can be controlled
+	hostChanMap := make(map[string]chan *crawler.Page)
+
+	// enables safe counting of urls still to be crawled
+	pendingURLs := crawler.NewConcurrentCounter()
+
+	// stores hashes of links already crawled
+	visitedURLs := crawler.NewConcurrentMap()
+
+	// stores hashes of the content of pages already crawled
+	seenContent := crawler.NewConcurrentMap()
+
 	// fetch seed urls from config
 	crawlerConfig := crawlerConfig.Get()
 
@@ -183,16 +236,13 @@ func main() {
 		doneChan <- true
 	}
 
-	domainHitDelayMS = crawlerConfig.DomainHitDelayMS
-	maxDepth = crawlerConfig.DomainHitDelayMS
-
 	// decide which urls are appropriate to crawl
-	go filter()
+	go filter(toBeFiltered, toBeVisited, visitedURLs, seenContent, pendingURLs, doneChan)
 
 	// route filtered urls to host-specific channel
-	go route()
+	go route(toBeVisited, hostChanMap, pendingURLs, visitedURLs, seenContent, toBeFiltered, doneChan)
 
-	// send seed urls to url frontier
+	// send seed urls to be filtered and crawled
 	for _, url := range crawlerConfig.Seeds {
 		page := crawler.NewPage(url, url, 0, nil)
 		defer page.PrintTree()

@@ -38,12 +38,6 @@ func NewPage(url string, linkText string, depth int, parent *Page) *Page {
 	return &newPage
 }
 
-func (page *Page) AddCrawlData(contentString string, children []*Page) {
-	page.RawContent = contentString
-	page.ContentHash = util.Hash(contentString)
-	page.Children = children
-}
-
 // GetChildren finds the links in a page, uses them to contruct new
 // Page structs relating to the parent, and returns those new Page structs
 func (page *Page) GetChildren(pageBody io.ReadCloser, depth int) (children []*Page) {
@@ -135,7 +129,6 @@ func (page *Page) IsCrawlable(visitedURLs *ConcurrentMap, seenContent *Concurren
 	return true
 }
 
-// TODO
 // IsAlreadyVisited checks whether a page has already been crawled
 func (page *Page) IsAlreadyVisited() (visited bool, e error) {
 	return
@@ -151,15 +144,16 @@ func (page *Page) PrintTree() {
 		fmt.Print("\n\n")
 	}
 
-	indent := 60
+	indentSize := 60
 
-	fmt.Printf("[%d] %-*s", page.Depth, indent, page.URL)
+	depthString := fmt.Sprintf("[%d] ", page.Depth)
+	fmt.Printf(depthString+"%-*s", indentSize, page.URL)
 
 	if page.Children != nil && len(page.Children) != 0 {
 		for i, child := range page.Children {
 			if i != 0 {
 				fmt.Print("\n")
-				fmt.Printf("%*s", indent*(page.Depth+1), "")
+				fmt.Printf("%*s", (indentSize+len(depthString))*(page.Depth+1), "")
 			}
 			child.PrintTree()
 		}
