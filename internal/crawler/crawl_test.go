@@ -4,24 +4,23 @@ import (
 	"testing"
 	"time"
 	config "webcrawler/config/crawler"
-	"webcrawler/internal/crawler"
 	"webcrawler/test/util"
 )
 
 func TestNewCrawlSession(t *testing.T) {
 	tests := []struct {
 		name           string
-		expectedResult crawler.CrawlSession
+		expectedResult CrawlSession
 	}{
 		{
 			name: "success_standard",
-			expectedResult: crawler.CrawlSession{
-				ToBeFiltered: make(chan *crawler.Page),
-				ToBeVisited:  make(chan *crawler.Page),
-				HostChannels: make(map[string]chan *crawler.Page),
-				VisitedURLs:  crawler.NewConcurrentMap(),
-				SeenContent:  crawler.NewConcurrentMap(),
-				PendingURLs:  crawler.NewConcurrentCounter(),
+			expectedResult: CrawlSession{
+				ToBeFiltered: make(chan *Page),
+				ToBeVisited:  make(chan *Page),
+				HostChannels: make(map[string]chan *Page),
+				VisitedURLs:  NewConcurrentMap(),
+				SeenContent:  NewConcurrentMap(),
+				PendingURLs:  NewConcurrentCounter(),
 				DoneChan:     make(chan bool),
 			},
 		},
@@ -30,7 +29,7 @@ func TestNewCrawlSession(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 
-			session := crawler.NewCrawlSession()
+			session := NewCrawlSession()
 
 			if session.ToBeFiltered == nil || len(session.ToBeFiltered) != len(test.expectedResult.ToBeFiltered) {
 				t.Errorf("unexpected result.\n- received: %v\n- expected %v", session.ToBeFiltered, test.expectedResult.ToBeFiltered)
@@ -60,12 +59,12 @@ func TestNewCrawlSession(t *testing.T) {
 func TestFilterURLs(t *testing.T) {
 	tests := []struct {
 		name                 string
-		pages                []*crawler.Page
+		pages                []*Page
 		expectedPendingCount int
 	}{
 		{
 			name: "success_all_accepted",
-			pages: []*crawler.Page{{
+			pages: []*Page{{
 				URL:   "http://www.google.com",
 				Depth: 0,
 			}, {
@@ -76,7 +75,7 @@ func TestFilterURLs(t *testing.T) {
 		},
 		{
 			name: "success_one_accepted_one_rejected",
-			pages: []*crawler.Page{{
+			pages: []*Page{{
 				URL:   "http://www.google.com",
 				Depth: 0,
 			}, {
@@ -87,7 +86,7 @@ func TestFilterURLs(t *testing.T) {
 		},
 		{
 			name: "success_none_accepted",
-			pages: []*crawler.Page{{
+			pages: []*Page{{
 				URL:   "http://www.google.com",
 				Depth: config.Get().MaxDepth + 1,
 			}, {
@@ -103,7 +102,7 @@ func TestFilterURLs(t *testing.T) {
 
 			logBuffer := util.GetLogBuffer()
 
-			session := crawler.NewCrawlSession()
+			session := NewCrawlSession()
 			go session.FilterURLs()
 			go func() {
 				for {
@@ -133,11 +132,11 @@ func TestFilterURLs(t *testing.T) {
 func TestRouteAcceptedURLs(t *testing.T) {
 	tests := []struct {
 		name  string
-		pages []*crawler.Page
+		pages []*Page
 	}{
 		{
 			name: "success_all_accepted",
-			pages: []*crawler.Page{{
+			pages: []*Page{{
 				URL: "http://www.google.com",
 			}, {
 				URL: "http://www.google.com/images",
@@ -150,11 +149,11 @@ func TestRouteAcceptedURLs(t *testing.T) {
 
 			logBuffer := util.GetLogBuffer()
 
-			session := crawler.NewCrawlSession()
+			session := NewCrawlSession()
 			go session.RouteAcceptedURLs()
 
 			for _, page := range test.pages {
-				go func(page *crawler.Page) {
+				go func(page *Page) {
 					for {
 						channel, _ := session.GetHostChannel(page)
 						<-channel
@@ -170,7 +169,7 @@ func TestRouteAcceptedURLs(t *testing.T) {
 			t.Log(logBuffer.String())
 
 			for _, page := range test.pages {
-				domain, e := crawler.GetURLDomain(page.URL)
+				domain, e := GetURLDomain(page.URL)
 				if e != nil {
 					t.Errorf("bad test input, page url - %s", page.URL)
 				}
@@ -185,7 +184,7 @@ func TestRouteAcceptedURLs(t *testing.T) {
 
 func TestCheckDone(t *testing.T) {
 
-	session := crawler.NewCrawlSession()
+	session := NewCrawlSession()
 
 	session.PendingURLs.Add(1)
 

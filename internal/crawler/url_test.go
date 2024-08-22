@@ -3,7 +3,6 @@ package crawler
 import (
 	"fmt"
 	"testing"
-	"webcrawler/internal/crawler"
 )
 
 func TestGetURLDomain(t *testing.T) {
@@ -42,7 +41,7 @@ func TestGetURLDomain(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 
-			domain, e := crawler.GetURLDomain(test.url)
+			domain, e := GetURLDomain(test.url)
 
 			if domain != test.expectedString {
 				t.Errorf("unexpected domain.\n- received: %s\n- expected %s", domain, test.expectedString)
@@ -101,7 +100,7 @@ func TestFixShortcutLink(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 
-			domain, e := crawler.FixShortcutLink(test.parentURL, test.link)
+			domain, e := FixShortcutLink(test.parentURL, test.link)
 
 			if domain != test.expectedString {
 				t.Errorf("unexpected domain.\n- received: %s\n- expected %s", domain, test.expectedString)
@@ -124,35 +123,35 @@ func TestIsValidLink(t *testing.T) {
 		name            string
 		url             string
 		linkText        string
-		currentChildren []*crawler.Page
+		currentChildren []*Page
 		expectedResult  bool
 	}{
 		{
 			name:            "success_valid",
 			url:             "https://www.google.com",
 			linkText:        "Google",
-			currentChildren: []*crawler.Page{},
+			currentChildren: []*Page{},
 			expectedResult:  true,
 		},
 		{
 			name:            "success_invalid_exists",
 			url:             "https://www.google.com",
 			linkText:        "Google",
-			currentChildren: []*crawler.Page{{URL: "https://www.google.com"}},
+			currentChildren: []*Page{{URL: "https://www.google.com"}},
 			expectedResult:  false,
 		},
 		{
 			name:            "success_invalid_url",
 			url:             "",
 			linkText:        "Google",
-			currentChildren: []*crawler.Page{},
+			currentChildren: []*Page{},
 			expectedResult:  false,
 		},
 		{
 			name:            "success_invalid_linkText",
 			url:             "https://www.google.com",
 			linkText:        "",
-			currentChildren: []*crawler.Page{},
+			currentChildren: []*Page{},
 			expectedResult:  false,
 		},
 		{
@@ -167,7 +166,7 @@ func TestIsValidLink(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 
-			isValidLink := crawler.IsValidLink(test.url, test.linkText, test.currentChildren)
+			isValidLink := IsValidLink(test.url, test.linkText, test.currentChildren)
 
 			if isValidLink != test.expectedResult {
 				t.Errorf("unexpected result.\n- received: %t\n- expected %t", isValidLink, test.expectedResult)
@@ -202,7 +201,7 @@ func TestTrimLinkVars(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 
-			link := crawler.TrimLinkVars(test.link)
+			link := TrimLinkVars(test.link)
 
 			if link != test.expectedResult {
 				t.Errorf("unexpected result.\n- received: %s\n- expected %s", link, test.expectedResult)
