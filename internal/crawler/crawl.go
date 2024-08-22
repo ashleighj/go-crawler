@@ -2,6 +2,7 @@ package crawler
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"time"
 	crawlerConfig "webcrawler/config/crawler"
@@ -47,6 +48,8 @@ func NewCrawlSession() *CrawlSession {
 		DoneChan:     make(chan bool)}
 }
 
+// FilterURLs continuously receives from the "ToBeFiltered" channel and decides
+// which urls received should be send to the router for crawling
 func (c *CrawlSession) FilterURLs() {
 	for {
 		select {
@@ -55,9 +58,9 @@ func (c *CrawlSession) FilterURLs() {
 
 			if page.IsCrawlable(c.VisitedURLs, c.SeenContent) {
 				logger.Infof("new page accepted - %s", page.URL)
+
 				c.PendingURLs.Add(1)
 				c.ToBeVisited <- page
-
 			} else {
 				logger.Infof("new page rejected - %s", page.URL)
 				c.CheckDone()
@@ -68,12 +71,22 @@ func (c *CrawlSession) FilterURLs() {
 	}
 }
 
-func (c *CrawlSession) RouteAcceptedUrls() {
+// RouteAcceptedURLs received recently-filtered urls from the "ToBeVisited" channel and
+// finds the appropriate channel to send them to for crawling based on their host. Crawling
+// is split by host so that the timing of hits to that host can be controlled so as not to
+// overwhelm it / break its rate-limiting rules
+func (c *CrawlSession) RouteAcceptedURLs() {
 	for {
 		select {
 		case page := <-c.ToBeVisited:
 			logger.Infof("new page to be routed - %s", page.URL)
-			channel := c.GetHostChannel(page)
+
+			channel, e := c.GetHostChannel(page)
+			if e != nil {
+				logger.Errorf("could not get host-specific channel to send page [%s] to", page.URL)
+				break
+			}
+
 			channel <- page
 
 		default:
@@ -81,6 +94,7 @@ func (c *CrawlSession) RouteAcceptedUrls() {
 	}
 }
 
+// CheckDone checks whether it's time to finish the crawl session and print the link tree(s)
 func (c *CrawlSession) CheckDone() {
 	logger.Info("checking if done")
 
@@ -94,11 +108,12 @@ func (c *CrawlSession) CheckDone() {
 	logger.Info("crawl continuing...")
 }
 
-func (c *CrawlSession) GetHostChannel(page *Page) (hostChannel chan *Page) {
+// GetHostChannel finds the appropriate channel to send a crawlable page to in order to be crawled
+func (c *CrawlSession) GetHostChannel(page *Page) (hostChannel chan *Page, e error) {
 	// get url domain part
 	domain, e := GetURLDomain(page.URL)
 	if e != nil {
-		logger.Warnf("could not get url domain in order to find host channel - %s", e)
+		e = fmt.Errorf("could not get url domain in order to find host channel - %s", e)
 		return
 	}
 
@@ -113,9 +128,10 @@ func (c *CrawlSession) GetHostChannel(page *Page) (hostChannel chan *Page) {
 	}
 
 	logger.Infof("returning host channel for domain [%s]", domain)
-	return channel
+	return channel, nil
 }
 
+// CrawlDomainURLs runs once per domain
 func (c *CrawlSession) CrawlDomainURLs(domain string, channel chan *Page) {
 	logger.Infof("now receiving urls to be crawled from domain [%s]", domain)
 

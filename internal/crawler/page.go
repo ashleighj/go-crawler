@@ -46,7 +46,8 @@ func (page *Page) GetChildren(pageBody io.ReadCloser, depth int) (children []*Pa
 	tokeniser := html.NewTokenizer(pageBody)
 
 	var linkTagStart *html.Token
-	var linkTagText string
+	linkTagText := ""
+	link := ""
 
 	// scan page content and collect subpages
 	// loop until we find and error, which could also represent the end of the page stream
@@ -79,59 +80,88 @@ func (page *Page) GetChildren(pageBody io.ReadCloser, depth int) (children []*Pa
 			case html.SelfClosingTagToken:
 				logger.Infof("SelfClosingTagToken found - [%v]", token)
 
+				link = getLinkFromToken(&token)
+
 			case html.EndTagToken:
 				if linkTagStart == nil {
 					logger.Warnf("link end tag [%v] without start tag found in page [%s]", token, page.URL)
 					continue
 				}
 
-				link := ""
-				for i := range linkTagStart.Attr {
-					if linkTagStart.Attr[i].Key == "href" {
-						link = strings.TrimSpace(linkTagStart.Attr[i].Val)
-					}
-				}
-
-				link = strings.ReplaceAll(FixShortcutLink(page.URL, link), " ", "")
-
-				if IsValidLink(link, linkTagText, depth, children) {
-					children = append(children, NewPage(link, linkTagText, depth, page))
-					logger.Infof("link found [%v] in page [%s]", link, page.URL)
-				}
+				link = getLinkFromToken(linkTagStart)
 
 				linkTagStart = nil
 				linkTagText = ""
+			}
+
+			link, e := FixShortcutLink(page.URL, link)
+			if e != nil {
+				logger.Errorf("problem with link [%s] - %s", link, e)
+				continue
+			}
+
+			if link != "" && IsValidLink(link, linkTagText, children) {
+				logger.Infof("link found [%v] in page [%s]", link, page.URL)
+				children = append(children, NewPage(link, linkTagText, depth, page))
+				link = ""
 			}
 		}
 	}
 	return
 }
 
+func getLinkFromToken(token *html.Token) (link string) {
+	for i := range token.Attr {
+		if token.Attr[i].Key == "href" {
+			link = strings.TrimSpace(token.Attr[i].Val)
+		}
+	}
+
+	return strings.ReplaceAll(link, " ", "")
+}
+
 // IsCrawlable decides whether to parse a page (i.e. crawl further)
 func (page *Page) IsCrawlable(visitedURLs *ConcurrentMap, seenContent *ConcurrentMap) bool {
 	config := crawlerConfig.Get()
+
+	// check max depth has not yet been reached
 	if page.Depth >= config.MaxDepth {
 		logger.Infof("page [%s] not crawlable - max depth reached", page.URL)
 		return false
 	}
 
+	urlHost, e := GetURLDomain(page.URL)
+	if e != nil {
+		logger.Errorf("unexpected error checking page is crawlable, could not parse URL - [%s]", e)
+		return false
+	}
+
+	// check site is not in configured blacklist
+	for _, blacklisted := range config.BlacklistedURLs {
+		blacklistedHost, e := GetURLDomain(blacklisted)
+		if e != nil {
+			logger.Errorf("could not parse blacklist URL [%s] - [%s]", blacklisted, e)
+			continue
+		}
+		if urlHost == blacklistedHost {
+			logger.Infof("page [%s] not crawlable - site blacklisted", page.URL)
+			return false
+		}
+	}
+
+	// check url has not yet been crawled
 	if visitedURLs.KeyExists(page.URLHash) {
 		logger.Infof("page [%s] not crawlable - url already visited", page.URL)
 		return false
 	}
+
+	// check if page content has already been seen, perhaps via a different URL
 	if seenContent.KeyExists(page.ContentHash) {
 		logger.Infof("page [%s] not crawlable - content already seen", page.URL)
 		return false
 	}
 
-	// TODO check for blacklisted sites
-
 	return true
-}
-
-// IsAlreadyVisited checks whether a page has already been crawled
-func (page *Page) IsAlreadyVisited() (visited bool, e error) {
-	return
 }
 
 // PrintTree prints the site map to the console

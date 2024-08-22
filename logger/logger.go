@@ -3,6 +3,7 @@ package webcrawler
 import (
 	"fmt"
 	"log"
+	"strings"
 )
 
 const (
@@ -15,12 +16,12 @@ const (
 
 // Info - posts an info-level log
 func Info(message string) {
-	log.Printf(messageFmt, prefixInfo, message)
+	log.Printf(messageFmt, prefixInfo, escape(message))
 }
 
 // Infof - posts a formatted info-level log
 func Infof(formatString string, vars ...interface{}) {
-	log.Printf(messageFmt, prefixInfo, fmt.Sprintf(formatString, vars...))
+	log.Printf(messageFmt, prefixInfo, escape(fmt.Sprintf(formatString, vars...)))
 }
 
 // Error - posts an error log
@@ -30,7 +31,7 @@ func Error(message interface{}) {
 
 // Errorf - posts a formatted error log
 func Errorf(formatString string, vars ...interface{}) {
-	log.Printf(messageFmt, prefixError, fmt.Sprintf(formatString, vars...))
+	log.Printf(messageFmt, prefixError, escape(fmt.Sprintf(formatString, vars...)))
 }
 
 // Warn - posts a warning log
@@ -40,10 +41,16 @@ func Warn(message interface{}) {
 
 // Warnf - posts a formatted warn-level log
 func Warnf(formatString string, vars ...interface{}) {
-	log.Printf(messageFmt, prefixWarn, fmt.Sprintf(formatString, vars...))
+	log.Printf(messageFmt, prefixWarn, escape(fmt.Sprintf(formatString, vars...)))
 }
 
 // Fatal - posts a fatal log and shuts down the application
 func Fatal(message interface{}) {
-	log.Fatalf(messageFmt, prefixFatal, message)
+	escaped := escape(fmt.Sprintf("%v", message))
+	log.Fatalf(messageFmt, prefixFatal, escaped)
+}
+
+func escape(input string) string {
+	input = strings.ReplaceAll(input, "\"", "\\\"")
+	return strings.ReplaceAll(input, "\\", "\\\\")
 }

@@ -43,7 +43,7 @@ func main() {
 	go crawlerSession.FilterURLs()
 
 	// route filtered urls to host-specific channel
-	go crawlerSession.RouteAcceptedUrls()
+	go crawlerSession.RouteAcceptedURLs()
 
 	// send seed urls to be filtered and crawled
 	for _, url := range crawlerConfig.Seeds {
