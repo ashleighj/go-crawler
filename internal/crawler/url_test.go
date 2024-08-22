@@ -100,7 +100,7 @@ func TestFixShortcutLink(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 
-			domain, e := FixShortcutLink(test.parentURL, test.link)
+			domain, e := FixLinkForm(test.parentURL, test.link)
 
 			if domain != test.expectedString {
 				t.Errorf("unexpected domain.\n- received: %s\n- expected %s", domain, test.expectedString)
