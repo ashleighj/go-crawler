@@ -47,7 +47,6 @@ func (page *Page) GetChildren(pageBody io.ReadCloser, depth int) (children []*Pa
 
 	var linkTagStart *html.Token
 	linkTagText := ""
-	link := ""
 
 	// scan page content and collect subpages
 	// loop until we find and error, which could also represent the end of the page stream
@@ -77,33 +76,33 @@ func (page *Page) GetChildren(pageBody io.ReadCloser, depth int) (children []*Pa
 					linkTagStart = &token
 				}
 
-			case html.SelfClosingTagToken:
-				logger.Infof("SelfClosingTagToken found - [%v]", token)
-
-				link = getLinkFromToken(&token)
-
 			case html.EndTagToken:
 				if linkTagStart == nil {
 					logger.Warnf("link end tag [%v] without start tag found in page [%s]", token, page.URL)
 					continue
 				}
 
-				link = getLinkFromToken(linkTagStart)
+				// get link from start token
+				link := ""
+				for i := range linkTagStart.Attr {
+					if linkTagStart.Attr[i].Key == "href" {
+						link = strings.TrimSpace(linkTagStart.Attr[i].Val)
+					}
+				}
+
+				link, e := FixLinkForm(page.URL, link)
+				if e != nil {
+					logger.Errorf("problem with link [%s] - %s", link, e)
+					continue
+				}
+
+				if IsValidLink(link, linkTagText, children) {
+					children = append(children, NewPage(link, linkTagText, depth, page))
+					logger.Infof("link found [%v] in page [%s]", link, page.URL)
+				}
 
 				linkTagStart = nil
 				linkTagText = ""
-			}
-
-			link, e := FixShortcutLink(page.URL, link)
-			if e != nil {
-				logger.Errorf("problem with link [%s] - %s", link, e)
-				continue
-			}
-
-			if link != "" && IsValidLink(link, linkTagText, children) {
-				logger.Infof("link found [%v] in page [%s]", link, page.URL)
-				children = append(children, NewPage(link, linkTagText, depth, page))
-				link = ""
 			}
 		}
 	}

@@ -27,8 +27,10 @@ func GetURLDomain(urlString string) (domain string, e error) {
 	return parsed.Host, nil
 }
 
-// FixShortcutLink checks if a link is relative (i.e. not fully-formed) and, if so, adds the schema and domain of its parent page
-func FixShortcutLink(parentURL string, link string) (fixedLink string, e error) {
+// FixLinkForm fixes link form issues, e.g. checks if a link is relative (i.e. not fully-formed) and, if so, adds the schema and domain of its parent page
+func FixLinkForm(parentURL string, link string) (fixedLink string, e error) {
+	link = strings.ReplaceAll(link, " ", "")
+	
 	parsed, e := url.Parse(link)
 	if e != nil {
 		e = fmt.Errorf("could not test link format, error parsing url [%s] - [%s]", link, e)
