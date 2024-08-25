@@ -13,7 +13,8 @@ func FetchPageBody(url string) (body io.ReadCloser, e error) {
 	logger.Infof("fetching page [%s]", url)
 	response, e := http.Get(url)
 	if e != nil {
-		logger.Errorf("error fetching page [%s - %s]", url, e)
+		e = fmt.Errorf("error fetching page [%s] - %s", url, e)
+		logger.Error(e)
 		return
 	}
 

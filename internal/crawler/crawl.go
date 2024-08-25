@@ -137,10 +137,11 @@ func (c *CrawlSession) CrawlDomainURLs(domain string, channel chan *Page) {
 
 	for {
 		page := <-channel
+		
+		logger.Infof("received new link [%s] from domain [%s] for crawl", page.URL, domain)
 		time.Sleep(time.Duration(crawlerConfig.Get().DomainHitDelayMS) * time.Millisecond)
-
 		logger.Infof("queueing new link [%s] from domain [%s] for crawl", page.URL, domain)
-
+		
 		go c.Crawl(page)
 	}
 }
