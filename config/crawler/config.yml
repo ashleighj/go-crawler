@@ -7,7 +7,6 @@ server:
     write: 10
     idle: 5
 seeds:
-  # - https://www.wisdomforgoldfish.com
   - https://demo.cyotek.com/
 blacklisted_urls:
 domain_delay_ms: 3000
