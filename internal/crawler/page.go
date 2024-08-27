@@ -82,20 +82,17 @@ func (page *Page) GetChildren(pageBody io.ReadCloser, depth int) (children []*Pa
 					continue
 				}
 
-				// get link from start token
-				link := ""
-				for i := range linkTagStart.Attr {
-					if linkTagStart.Attr[i].Key == "href" {
-						link = strings.TrimSpace(linkTagStart.Attr[i].Val)
-					}
-				}
+				// get link from start tag token
+				link := getLinkFromToken(linkTagStart)
 
+				// improve link form if necessary
 				link, e := FixLinkForm(page.URL, link)
 				if e != nil {
 					logger.Errorf("problem with link [%s] - %s", link, e)
 					continue
 				}
 
+				// check if link is valid to be added to the link tree
 				if IsValidLink(link, linkTagText, children) {
 					children = append(children, NewPage(link, linkTagText, depth, page))
 					logger.Infof("link found [%v] in page [%s]", link, page.URL)
@@ -115,8 +112,7 @@ func getLinkFromToken(token *html.Token) (link string) {
 			link = strings.TrimSpace(token.Attr[i].Val)
 		}
 	}
-
-	return strings.ReplaceAll(link, " ", "")
+	return link
 }
 
 // IsCrawlable decides whether to parse a page (i.e. crawl further)

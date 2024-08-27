@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"net/http"
 	"time"
 	crawlerConfig "webcrawler/config/crawler"
 	"webcrawler/internal/util"
@@ -137,11 +138,11 @@ func (c *CrawlSession) CrawlDomainURLs(domain string, channel chan *Page) {
 
 	for {
 		page := <-channel
-		
+
 		logger.Infof("received new link [%s] from domain [%s] for crawl", page.URL, domain)
 		time.Sleep(time.Duration(crawlerConfig.Get().DomainHitDelayMS) * time.Millisecond)
 		logger.Infof("queueing new link [%s] from domain [%s] for crawl", page.URL, domain)
-		
+
 		go c.Crawl(page)
 	}
 }
@@ -171,7 +172,7 @@ func (c *CrawlSession) Crawl(currentPage *Page) {
 		logger.Warnf("broken link [%s], can't crawl - %s", currentPage.URL, e)
 		return
 	}
-	if pageBody == nil {
+	if pageBody == nil || pageBody == http.NoBody {
 		logger.Errorf("page body for url [%s] is empty, nothing to crawl", currentPage.URL)
 		return
 	}

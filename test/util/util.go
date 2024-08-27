@@ -34,6 +34,8 @@ func GetTestServer(
 
 			if responseBody != "" {
 				w.Write([]byte(responseBody))
+			} else {
+				w.Write(nil)
 			}
 		}))
 }

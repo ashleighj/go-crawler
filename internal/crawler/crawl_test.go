@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 	config "webcrawler/config/crawler"
+	"webcrawler/internal/util"
 	testutil "webcrawler/test/util"
 )
 
@@ -15,7 +16,7 @@ func TestNewCrawlSession(t *testing.T) {
 		expectedResult CrawlSession
 	}{
 		{
-			name: "success_standard",
+			name: "success",
 			expectedResult: CrawlSession{
 				ToBeFiltered: make(chan *Page),
 				ToBeVisited:  make(chan *Page),
@@ -276,7 +277,8 @@ func TestCrawl(t *testing.T) {
 		name             string
 		path             string
 		pageContent      string
-		expectedLinks    []string
+		isSeen           bool
+		expectedVisited  []string
 		expectedChildren []string
 	}{
 		{
@@ -294,8 +296,40 @@ func TestCrawl(t *testing.T) {
 				<a href="/test">Test Link</a>
 			</body>
 		</html>`,
-			expectedLinks:    []string{"/"},
+			expectedVisited:  []string{"/"},
 			expectedChildren: []string{"/test"},
+		},
+		{
+			name:             "fail_broken_link",
+			path:             "/",
+			expectedVisited:  []string{},
+			expectedChildren: []string{},
+		},
+		{
+			name:             "fail_empty_pageBody",
+			path:             "/",
+			pageContent:      "",
+			expectedVisited:  []string{},
+			expectedChildren: []string{},
+		},
+		{
+			name:   "success_already_seen",
+			path:   "/",
+			isSeen: true,
+			pageContent: `
+		<!doctype html>
+		<html>
+			<head>
+				<meta charset="utf-8">
+				<title>Test Webpage</title>
+				<meta name="description" content="Test Webpage">
+			</head>
+			<body> 
+				<a href="/test">Test Link</a>
+			</body>
+		</html>`,
+			expectedVisited:  []string{},
+			expectedChildren: []string{},
 		},
 	}
 
@@ -313,6 +347,10 @@ func TestCrawl(t *testing.T) {
 			domain, _ := GetURLDomain(server.URL)
 			session.HostChannels[domain] = make(chan *Page)
 
+			if test.isSeen {
+				session.SeenContent.Add(util.Hash(test.pageContent), 1)
+			}
+
 			go session.CrawlDomainURLs(domain, session.HostChannels[domain])
 
 			go func() {
@@ -323,6 +361,7 @@ func TestCrawl(t *testing.T) {
 
 			url := fmt.Sprintf("%s%s", server.URL, test.path)
 			page := NewPage(url, url, 0, nil)
+
 			go func() {
 				session.HostChannels[domain] <- page
 			}()
@@ -331,13 +370,13 @@ func TestCrawl(t *testing.T) {
 
 			t.Log(logBuffer.String())
 
-			for _, link := range test.expectedLinks {
+			for _, link := range test.expectedVisited {
 				if !session.VisitedURLs.KeyExists(page.URLHash) {
 					t.Errorf("missing expected visited link [%s]", link)
 				}
 			}
-			if len(session.VisitedURLs.data) != len(test.expectedLinks) {
-				t.Errorf("visited links mismatch.\n- received: %d\n- expected: %d", len(session.VisitedURLs.data), len(test.expectedLinks))
+			if len(session.VisitedURLs.data) != len(test.expectedVisited) {
+				t.Errorf("visited links mismatch.\n- received: %d\n- expected: %d", len(session.VisitedURLs.data), len(test.expectedVisited))
 			}
 			for _, expected := range test.expectedChildren {
 				found := false

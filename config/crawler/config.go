@@ -27,6 +27,7 @@ var defaultConfig = Config{
 	DomainHitDelayMS: 2000,
 	MaxDepth:         5,
 	IgnoreIfContains: []string{".png", ".jpg", "javascript"},
+	PrintIndent:      20,
 }
 
 // Config - configuration relating to the Crawler app
@@ -37,6 +38,7 @@ type Config struct {
 	DomainHitDelayMS int          `yaml:"domain_delay_ms"`
 	MaxDepth         int          `yaml:"max_depth"`
 	IgnoreIfContains []string     `yaml:"ignore_if_contains"`
+	PrintIndent      int          `yaml:"print_indent"`
 }
 
 // ServerConfig - config relating to the web server
