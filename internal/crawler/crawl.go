@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 	crawlerConfig "webcrawler/config/crawler"
 	"webcrawler/internal/util"
@@ -13,6 +14,9 @@ import (
 
 // CrawlSession holds all data structures required to crawl a given set of seed URLs
 type CrawlSession struct {
+
+	// http client for crawling links
+	Client http.Client
 
 	// all urls yet to be directed or downloaded
 	ToBeFiltered chan *Page
@@ -38,8 +42,9 @@ type CrawlSession struct {
 }
 
 // NewCrawlSession creates and returns a pointer to a new CrawlerSession struct
-func NewCrawlSession() *CrawlSession {
+func NewCrawlSession(readTimeoutSecs int) *CrawlSession {
 	return &CrawlSession{
+		Client:       *&http.Client{Timeout: time.Duration(readTimeoutSecs) * time.Second},
 		ToBeFiltered: make(chan *Page),
 		ToBeVisited:  make(chan *Page),
 		HostChannels: make(map[string]chan *Page),
@@ -147,8 +152,12 @@ func (c *CrawlSession) CrawlDomainURLs(domain string, channel chan *Page) {
 	}
 }
 
+// Crawl fetches content for the current Page and sends any new, valid links to be filtered for crawling
+// In order for a link to be valid for "queuing" at this stage, it must not have previously been crawled, 
+// and it must not be part of a page of content that has previously been seen perhaps under a different link
 func (c *CrawlSession) Crawl(currentPage *Page) {
 	var children []*Page
+
 	defer func() {
 		c.PendingURLs.Subtract(1)
 		c.CheckDone()
@@ -167,7 +176,7 @@ func (c *CrawlSession) Crawl(currentPage *Page) {
 	}
 
 	// fetch page body
-	pageBody, e := FetchPageBody(currentPage.URL)
+	pageBody, e := c.FetchPageBody(currentPage.URL)
 	if e != nil {
 		logger.Warnf("broken link [%s], can't crawl - %s", currentPage.URL, e)
 		return
@@ -200,4 +209,40 @@ func (c *CrawlSession) Crawl(currentPage *Page) {
 	for _, child := range children {
 		c.ToBeFiltered <- child
 	}
+}
+
+// FetchPageBody performs a GET request on the given url and returns
+// the response body when it is of type "text/html"
+func (c *CrawlSession) FetchPageBody(url string) (body io.ReadCloser, e error) {
+	logger.Infof("fetching page [%s]", url)
+
+	req, e := http.NewRequest(http.MethodGet, url, nil)
+	if e != nil {
+		e = fmt.Errorf("error creating GET request for url [%s] - %s", url, e)
+		logger.Error(e)
+		return
+	}
+
+	response, e := c.Client.Do(req)
+	if e != nil {
+		e = fmt.Errorf("error fetching page [%s] - %s", url, e)
+		logger.Error(e)
+		return
+	}
+
+	status := response.StatusCode
+	if status < 200 || status > 299 {
+		e = fmt.Errorf("could not fetch page [%s], status code [%d]", url, status)
+		logger.Error(e)
+		return
+	}
+
+	for _, contentType := range response.Header["Content-Type"] {
+		if strings.Contains(contentType, "text/html") {
+			return response.Body, nil
+		}
+	}
+	e = fmt.Errorf("no html in page [%s]", url)
+	logger.Error(e)
+	return
 }

@@ -87,7 +87,7 @@ func TestIsCrawlable(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 
-			session := NewCrawlSession()
+			session := NewCrawlSession(3)
 
 			if test.pageVisited {
 				session.VisitedURLs.Add(test.page.URLHash, 1)

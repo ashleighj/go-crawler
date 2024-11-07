@@ -3,6 +3,7 @@ package crawler
 import (
 	"fmt"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 	config "webcrawler/config/crawler"
@@ -32,7 +33,7 @@ func TestNewCrawlSession(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 
-			session := NewCrawlSession()
+			session := NewCrawlSession(3)
 
 			if session.ToBeFiltered == nil || len(session.ToBeFiltered) != len(test.expectedResult.ToBeFiltered) {
 				t.Errorf("unexpected result.\n- received: %v\n- expected %v", session.ToBeFiltered, test.expectedResult.ToBeFiltered)
@@ -105,7 +106,7 @@ func TestFilterURLs(t *testing.T) {
 
 			logBuffer := testutil.GetLogBuffer()
 
-			session := NewCrawlSession()
+			session := NewCrawlSession(3)
 			go session.FilterURLs()
 			go func() {
 				for {
@@ -152,7 +153,7 @@ func TestRouteAcceptedURLs(t *testing.T) {
 
 			logBuffer := testutil.GetLogBuffer()
 
-			session := NewCrawlSession()
+			session := NewCrawlSession(3)
 			go session.RouteAcceptedURLs()
 
 			for _, page := range test.pages {
@@ -186,7 +187,7 @@ func TestRouteAcceptedURLs(t *testing.T) {
 }
 
 func TestCheckDone(t *testing.T) {
-	session := NewCrawlSession()
+	session := NewCrawlSession(3)
 
 	isDone := false
 
@@ -247,7 +248,7 @@ func TestGetHostChannel(t *testing.T) {
 
 			logBuffer := testutil.GetLogBuffer()
 
-			session := NewCrawlSession()
+			session := NewCrawlSession(3)
 			hostChan, e := session.GetHostChannel(test.page)
 
 			t.Log(logBuffer.String())
@@ -309,7 +310,7 @@ func TestCrawl(t *testing.T) {
 			name:             "fail_empty_pageBody",
 			path:             "/",
 			pageContent:      "",
-			expectedVisited:  []string{},
+			expectedVisited:  []string{"/"},
 			expectedChildren: []string{},
 		},
 		{
@@ -341,7 +342,7 @@ func TestCrawl(t *testing.T) {
 			server := testutil.GetTestServer(test.path, http.StatusOK, test.pageContent, map[string]string{"Content-Type": "text/html"})
 			defer server.Close()
 
-			session := NewCrawlSession()
+			session := NewCrawlSession(3)
 			session.PendingURLs.Add(1)
 
 			domain, _ := GetURLDomain(server.URL)
@@ -375,9 +376,11 @@ func TestCrawl(t *testing.T) {
 					t.Errorf("missing expected visited link [%s]", link)
 				}
 			}
+
 			if len(session.VisitedURLs.data) != len(test.expectedVisited) {
 				t.Errorf("visited links mismatch.\n- received: %d\n- expected: %d", len(session.VisitedURLs.data), len(test.expectedVisited))
 			}
+
 			for _, expected := range test.expectedChildren {
 				found := false
 				for _, child := range page.Children {
@@ -389,8 +392,88 @@ func TestCrawl(t *testing.T) {
 					t.Errorf("missing expected page child [%s]", expected)
 				}
 			}
+			
 			if len(test.expectedChildren) != len(page.Children) {
 				t.Errorf("page children mismatch.\n- received: %d\n- expected: %d", len(page.Children), len(test.expectedChildren))
+			}
+		})
+	}
+}
+
+func TestFetchPageBody(t *testing.T) {
+	tests := []struct {
+		name                  string
+		path                  string
+		statusCode            int
+		headers               map[string]string
+		response              string
+		expectedError         bool
+		expectedErrorContains string
+	}{
+		{
+			name:       "success",
+			path:       "/test",
+			statusCode: http.StatusOK,
+			headers:    map[string]string{"Content-Type": "text/html; charset=UTF-8"},
+			response: `
+		<!doctype html>
+		<html>
+			<head>
+				<meta charset="utf-8">
+				<title>Test Webpage</title>
+				<meta name="description" content="Test Webpage">
+			</head>
+			<body> 
+				<a href="https://www.google.com">Test Link</a>
+			</body>
+		</html>`,
+		},
+		{
+			name:                  "fail_get-error",
+			path:                  "/",
+			expectedError:         true,
+			expectedErrorContains: "error fetching page",
+		},
+		{
+			name:                  "fail_status-code",
+			path:                  "/test",
+			statusCode:            http.StatusForbidden,
+			expectedError:         true,
+			expectedErrorContains: "status code",
+		},
+		{
+			name:                  "fail_content-type",
+			path:                  "/api",
+			statusCode:            http.StatusOK,
+			response:              `{"data":"hello"}`,
+			headers:               map[string]string{"Content-Type": "application/json"},
+			expectedError:         true,
+			expectedErrorContains: "no html in page",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+
+			server := testutil.GetTestServer(test.path, test.statusCode, test.response, test.headers)
+			defer server.Close()
+
+			session := NewCrawlSession(3)
+			body, e := session.FetchPageBody(server.URL)
+
+			if test.expectedError {
+				if e == nil {
+					t.Errorf("missing error, should contain - %s", test.expectedErrorContains)
+				}
+				if !strings.Contains(e.Error(), test.expectedErrorContains) {
+					t.Errorf("error mismatch.\n- received: %s\n- expected to contain: %s", e, test.expectedErrorContains)
+				}
+			}
+			if test.expectedError == false && e != nil {
+				t.Errorf("unexpected error - %s", e)
+			}
+			if test.expectedError == false && body == nil {
+				t.Error("response body should not be nil")
 			}
 		})
 	}
