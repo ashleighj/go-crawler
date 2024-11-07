@@ -8,14 +8,6 @@ import (
 	logger "webcrawler/logger"
 )
 
-/*
-   Dear Reviewer, your time and effort looking over my code is super appreciated.
-	 I know you probably have a lot of other things going on!
-	 To hopefully save you some of that time & effort, I have added a ton of unusually-granular comments
-	 in an attempt to help you get through understanding my intentions/logic faster.
-	 Hope that helps!
-*/
-
 func main() {
 	fmt.Print(
 		`
@@ -28,10 +20,10 @@ func main() {
                                                                                                       
 `)
 
-	crawlerSession := crawler.NewCrawlSession()
-
 	// fetch seed urls from config
 	crawlerConfig := crawlerConfig.Get()
+
+	crawlerSession := crawler.NewCrawlSession(crawlerConfig.ReadTimeoutSeconds)
 
 	// check seed urls are not empty
 	if len(crawlerConfig.Seeds) == 0 {

@@ -13,54 +13,23 @@ const configFile = "../../config/crawler/config.yml"
 var config *Config
 
 var defaultConfig = Config{
-	Server: ServerConfig{
-		Host: "localhost",
-		Port: 8080,
-		Timeout: TimeoutConfig{
-			Server: 30,
-			Write:  5,
-			Read:   3,
-			Idle:   5,
-		},
-	},
-	Seeds:            []string{"https://www.wisdomforgoldfish.com"},
-	DomainHitDelayMS: 2000,
-	MaxDepth:         5,
-	IgnoreIfContains: []string{".png", ".jpg", "javascript"},
-	PrintIndent:      20,
+	ReadTimeoutSeconds: 3,
+	Seeds:              []string{"https://www.wisdomforgoldfish.com"},
+	DomainHitDelayMS:   2000,
+	MaxDepth:           5,
+	IgnoreIfContains:   []string{".png", ".jpg", "javascript"},
+	PrintIndent:        20,
 }
 
 // Config - configuration relating to the Crawler app
 type Config struct {
-	Server           ServerConfig `yaml:"server"`
-	Seeds            []string     `yaml:"seeds"`
-	BlacklistedURLs  []string     `yaml:"blacklisted_urls"`
-	DomainHitDelayMS int          `yaml:"domain_delay_ms"`
-	MaxDepth         int          `yaml:"max_depth"`
-	IgnoreIfContains []string     `yaml:"ignore_if_contains"`
-	PrintIndent      int          `yaml:"print_indent"`
-}
-
-// ServerConfig - config relating to the web server
-type ServerConfig struct {
-	Host    string        `yaml:"host"`
-	Port    int           `yaml:"port"`
-	Timeout TimeoutConfig `yaml:"timeout"`
-}
-
-// TimeoutConfig - config relating to web server timeouts
-type TimeoutConfig struct {
-	// Server - general server timeout to use for graceful shutdowns
-	Server int `yaml:"server"`
-
-	// Write - time until an HTTP server write opperation is cancelled
-	Write int `yaml:"write"`
-
-	// Read - time until an HTTP server read operation is cancelled
-	Read int `yaml:"read"`
-
-	// Idle - time before an IDLE HTTP session is closed
-	Idle int `yaml:"idle"`
+	ReadTimeoutSeconds int      `yaml:"read_timeout_secs"`
+	Seeds              []string `yaml:"seeds"`
+	BlacklistedURLs    []string `yaml:"blacklisted_urls"`
+	DomainHitDelayMS   int      `yaml:"domain_delay_ms"`
+	MaxDepth           int      `yaml:"max_depth"`
+	IgnoreIfContains   []string `yaml:"ignore_if_contains"`
+	PrintIndent        int      `yaml:"print_indent"`
 }
 
 // Get returns the config from file, or, if unavailable, default config

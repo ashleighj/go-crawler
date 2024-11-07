@@ -1,11 +1,4 @@
-server:
-  host: localhost
-  port: 8887
-  timeout:
-    server: 30
-    read: 15
-    write: 10
-    idle: 5
+read_timeout_secs: 3
 seeds:
   - https://demo.cyotek.com/
 blacklisted_urls:
