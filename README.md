@@ -23,3 +23,8 @@
 - routing    - 1 goroutine
 - pre-crawl  - goroutine per unique host in filtered URLs
 - crawl      - goroutine per host URL visited
+
+## Run
+
+0. (Optional) Update `seeds` in `config/config.yml`
+1. Run `go run cmd/crawler/main.go` in a terminal set to the project root directory.
