@@ -16,16 +16,7 @@
 
 ## Design
 
-
-[[ seed URLS ]] 
-    ^       --> filtering 
-    |                 --> [[ filtered URLS ]] 
-    |                             --> routing (channel/queue per host)
-    |                                                         --> [[ routed URLS  ]] 
-    |                                                                      --> GETing and link extraction |  
-    |                                                                                                     |
-    |                                                                                                     v 
-    -------------<-------------------<-------------------<--------------------<---------------<------------
+<img width="865" alt="Screenshot 2024-11-07 at 13 56 02" src="https://github.com/user-attachments/assets/801ce257-a33f-4c01-ba51-099663882d2c">
 
 filtering  - 1 goroutine
 routing    - 1 goroutine
